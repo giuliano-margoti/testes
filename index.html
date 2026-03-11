@@ -2,65 +2,99 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Gerador de Relatório de Observação</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Relatório Astronômico</title>
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 50px; background-color: #f4f4f9; }
+        #generate-btn { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 5px; }
+        #status { margin-top: 20px; color: #555; }
+    </style>
 </head>
 <body>
-    <h1>Gerador de Relatório de Astronomia</h1>
-    <button id="generate-btn" py-click="generate_excel">Gerar e Baixar Excel</button>
+
+    <h1>Relatório de Observação</h1>
+    <p>Clique no botão abaixo para ler os dados da planilha e gerar o arquivo Excel.</p>
+    
+    <button id="generate-btn" py-click="gerar_relatorio">Gerar e Baixar Relatório (.xlsx)</button>
     <div id="status"></div>
 
     <py-config>
-        packages = ["pandas", "xlsxwriter"]
+        packages = ["pandas", "xlsxwriter", "openpyxl"]
     </py-config>
 
     <py-script>
         import pandas as pd
         import io
-        from pyodide.ffi import create_proxy
-        from js import Blob, document, URL, window
+        from js import Blob, document, URL # Integração com o JavaScript do navegador
 
-        def generate_excel(event):
+        async def gerar_relatorio(event):
             status = document.getElementById("status")
-            status.innerHTML = "Processando..."
+            status.innerHTML = "⌛ Lendo planilha do Google e gerando arquivo..."
             
-            # 1. Seus dados
-            data_obs = "11/03/2026"
-            telescopio = "James Webb"
-            observadores = "Dra. Smith"
+            try:
+                # 1. Definição da URL da planilha (exportando como CSV)
+                url = "https://docs.google.com/spreadsheets/d/18yTaoaf6_dCcZSkHdUFVnreF_GjT5cZoShkpxbcfPG8/export?format=csv"
 
-            df2 = pd.DataFrame(index=range(5), columns=['A', 'B'])
-            df2.at[1, 'B'] = data_obs
-            df2.at[2, 'B'] = telescopio
-            df2.at[3, 'B'] = observadores
+                # 2. Lendo os dados para um DataFrame original
+                df_origem = pd.read_csv(url)
 
-            # 2. Criar o Excel em memória (BytesIO)
-            output = io.BytesIO()
-            writer = pd.ExcelWriter(output, engine='xlsxwriter')
-            df2.to_excel(writer, index=False, header=False, sheet_name='Relatório')
-            
-            # Formatação (mesmo código que já usamos)
-            workbook = writer.book
-            worksheet = writer.sheets['Relatório']
-            merge_format = workbook.add_format({'bold': 1, 'border': 1, 'align': 'center', 'valign': 'center', 'fg_color': '#D7E4BC'})
-            worksheet.merge_range(0, 0, 0, 1, "Relatório da observação", merge_format)
-            worksheet.set_column('B:B', 40)
-            
-            writer.close()
-            output.seek(0)
+                # 3. Extraindo as informações (pegando o primeiro registro [0])
+                data_obs = str(df_origem['Data da observação'][0])
+                telescopio = str(df_origem['Telescópio'][0])
+                observadores = str(df_origem['Câmera'][0])
 
-            # 3. Criar o link de download no navegador
-            file_data = output.getvalue()
-            blob = Blob.new([file_data], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})
-            url = URL.createObjectURL(blob)
-            
-            link = document.createElement("a")
-            link.href = url
-            link.download = "relatorio_observacao.xlsx"
-            link.click()
-            
-            status.innerHTML = "Download concluído!"
+                # 4. Criando o df2 com a estrutura de posições específicas (B2, B3, B4)
+                df2 = pd.DataFrame(index=range(5), columns=['A', 'B'])
+                df2.at[1, 'B'] = data_obs     # Posição 2B
+                df2.at[2, 'B'] = telescopio   # Posição 3B
+                df2.at[3, 'B'] = observadores # Posição 4B
+
+                # 5. Configurando a escrita do Excel em memória (buffer)
+                output = io.BytesIO()
+                writer = pd.ExcelWriter(output, engine='xlsxwriter')
+                df2.to_excel(writer, index=False, header=False, sheet_name='Relatório')
+
+                # 6. Formatação Visual
+                workbook  = writer.book
+                worksheet = writer.sheets['Relatório']
+
+                # Criando estilo para a célula mesclada (verde claro)
+                merge_format = workbook.add_format({
+                    'bold': 1, 'border': 1, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#D7E4BC'
+                })
+
+                # Mesclando A1 e B1 (índice 0,0 até 0,1)
+                worksheet.merge_range(0, 0, 0, 1, "Relatório da observação", merge_format)
+
+                # Ajustando larguras: Coluna A fixa em 20, Coluna B dinâmica
+                worksheet.set_column('A:A', 20)
+                largura_b = max(len(data_obs), len(telescopio), len(observadores)) + 5
+                worksheet.set_column('B:B', largura_b)
+
+                # Fecha o arquivo Excel na memória
+                writer.close()
+                output.seek(0)
+
+                # 7. Lógica de Download no Navegador
+                nome_arquivo = f"relatorio_{data_obs.replace('/', '-')}.xlsx"
+                file_data = output.getvalue()
+                # Transforma os bytes do Python em um objeto de download do navegador
+                blob = Blob.new([file_data], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})
+                url_download = URL.createObjectURL(blob)
+                
+                # Cria um link invisível e "clica" nele para baixar
+                link = document.createElement("a")
+                link.href = url_download
+                link.download = nome_arquivo
+                link.click()
+
+                status.innerHTML = f"✅ Sucesso! Arquivo '{nome_arquivo}' baixado."
+
+            except Exception as e:
+                status.innerHTML = f"❌ Erro: Verifique se a planilha é pública. <br> {str(e)}"
     </py-script>
+
 </body>
 </html>

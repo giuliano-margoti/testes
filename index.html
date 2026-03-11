@@ -2,98 +2,97 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Gerador de Relatório</title>
-    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Relatório de Observação</title>
+    
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css" />
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 50px; background-color: #121212; color: white; }
-        .box { border: 1px solid #333; padding: 20px; display: inline-block; border-radius: 10px; background-color: #1e1e1e; }
-        button { background: #238636; color: white; border: none; padding: 12px 24px; cursor: pointer; border-radius: 5px; font-weight: bold; }
-        button:hover { background: #2ea043; }
-        #status { margin-top: 20px; color: #aaa; }
+        body { font-family: sans-serif; text-align: center; padding: 50px; background-color: #f4f4f9; }
+        .container { background: white; padding: 30px; border-radius: 10px; shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 5px; }
+        button:disabled { background-color: #ccc; }
+        #status { margin-top: 20px; color: #555; }
     </style>
 </head>
 <body>
-    <div class="box">
-        <h1>🔭 Gerar Relatório Astronomia</h1>
-        <p>Lendo dados diretamente do Google Sheets</p>
-        <button id="btn" py-click="executar">Gerar e Baixar (.xlsx)</button>
-        <p id="status">Aguardando comando...</p>
+
+    <div class="container">
+        <h1>Relatório de Observação</h1>
+        <p>Clique no botão para processar a planilha e baixar o Excel.</p>
+        
+        <button id="btn-download" py-click="gerar_relatorio">🚀 Gerar e Baixar Excel</button>
+        
+        <div id="status">Carregando ambiente Python (aguarde)...</div>
     </div>
 
     <py-config>
-        packages = ["pandas", "xlsxwriter", "openpyxl"]
+        packages = ["pandas", "xlsxwriter", "openpyxl", "ssl"]
     </py-config>
 
     <py-script>
         import pandas as pd
+        import io
+        from pyodide.http import open_url
+        from js import Uint8Array, File, URL, document, window
 
-        # 1. Dados (os mesmos de antes)
-        
-        url = f"https://docs.google.com/spreadsheets/d/18yTaoaf6_dCcZSkHdUFVnreF_GjT5cZoShkpxbcfPG8/export?format=csv"        
-        
-        data_obs = df['Data da observação']
-        telescopio = df['Telescópio']
-        observadores = df['Câmera']
-        
-        df2 = pd.DataFrame(index=range(5), columns=['A', 'B'])
-        df2.at[1, 'B'] = data_obs
-        df2.at[2, 'B'] = telescopio
-        df2.at[3, 'B'] = observadores
-        
-        # 2. Exportando com ajuste de coluna
-        file_name = f"relatorio_observacao_{data_obs[0].replace('/','-')}.xlsx"
-        writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
-        df2.to_excel(writer, index=False, header=False, sheet_name='Relatório')
-        
-        workbook  = writer.book
-        worksheet = writer.sheets['Relatório']
-        
-        # Formatos
-        merge_format = workbook.add_format({'bold': 1, 'border': 1, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#D7E4BC'})
-        text_format = workbook.add_format({'align': 'left'})
-        
-        # Mesclando A0 e B0
-        worksheet.merge_range(0, 0, 0, 1, "Relatório da observação", merge_format)
-        
-        # --- AJUSTE DE LARGURA DAS COLUNAS ---
-        # Vamos definir uma largura fixa para a coluna A e automática para a B
-        worksheet.set_column('A:A', 20) # Coluna A com 20 caracteres de largura
-        
-        # Para a coluna B, vamos descobrir qual o maior texto nela
-        lista_textos = [str(data_obs), str(telescopio), str(observadores)]
-        maior_texto = max(len(t) for t in lista_textos)
-        largura_ajustada = maior_texto + 2 # Adicionamos uma "folga" de 2 caracteres
-        
-        worksheet.set_column('B:B', largura_ajustada) 
-        
-        writer.close()
-        print(f"Relatório gerado com colunas ajustadas: {file_name}")
+        # Avisar que o sistema está pronto
+        document.getElementById("status").innerHTML = "✅ Pronto para gerar!"
+
+        def gerar_relatorio(event):
+            status = document.getElementById("status")
+            status.innerHTML = "Processando... aguarde."
+            
+            try:
+                # 1. Dados da Planilha
+                url = "https://docs.google.com/spreadsheets/d/18yTaoaf6_dCcZSkHdUFVnreF_GjT5cZoShkpxbcfPG8/export?format=csv"
+                df = pd.read_csv(open_url(url))
+                
+                data_obs = str(df['Data da observação'].iloc[0])
+                telescopio = str(df['Telescópio'].iloc[0])
+                observadores = str(df['Câmera'].iloc[0])
+
+                df2 = pd.DataFrame(index=range(5), columns=['A', 'B'])
+                df2.at[1, 'B'] = data_obs
+                df2.at[2, 'B'] = telescopio
+                df2.at[3, 'B'] = observadores
+
+                # 2. Gerando o Excel em memória
+                output = io.BytesIO()
+                writer = pd.ExcelWriter(output, engine='xlsxwriter')
+                df2.to_excel(writer, index=False, header=False, sheet_name='Relatório')
+
+                workbook  = writer.book
                 worksheet = writer.sheets['Relatório']
-
-                # Formatação visual (Igual ao seu código)
                 merge_format = workbook.add_format({'bold': 1, 'border': 1, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#D7E4BC'})
+                
                 worksheet.merge_range(0, 0, 0, 1, "Relatório da observação", merge_format)
-
-                # Ajuste de largura
                 worksheet.set_column('A:A', 20)
-                maior_texto = max(len(data_obs), len(telescopio), len(observadores))
-                worksheet.set_column('B:B', maior_texto + 5)
+                worksheet.set_column('B:B', 35)
 
                 writer.close()
-                output.seek(0)
-
-                # 4. GERAÇÃO DO LINK DE DOWNLOAD NO NAVEGADOR
-                blob = Blob.new([output.getvalue()], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})
-                url_download = URL.createObjectURL(blob)
-                link = document.createElement("a")
-                link.href = url_download
-                link.download = file_name
-                link.click()
-
-                status.innerHTML = "✅ Arquivo baixado com sucesso!"
+                
+                # 3. Truque para baixar o arquivo no navegador via JS
+                processed_data = output.getvalue()
+                file_name = f"relatorio_{data_obs.replace('/','-')}.xlsx"
+                
+                js_array = Uint8Array.new(processed_data)
+                file = File.new([js_array], file_name, {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})
+                url = URL.createObjectURL(file)
+                
+                hidden_link = document.createElement("a")
+                hidden_link.href = url
+                hidden_link.download = file_name
+                document.body.appendChild(hidden_link)
+                hidden_link.click()
+                document.body.removeChild(hidden_link)
+                
+                status.innerHTML = "✅ Download concluído!"
+                
             except Exception as e:
-                status.innerHTML = f"❌ Erro detectado: {str(e)}"
+                status.innerHTML = f"❌ Erro: {str(e)}"
     </py-script>
+
 </body>
 </html>

@@ -35,74 +35,68 @@
     <py-script>
         import pandas as pd
         import io
-        from pyodide.http import open_url # Necessário para abrir URLs no navegador
-        from js import Blob, document, URL # Ferramentas para gerar download via JS
-
+        from pyodide.http import open_url
+        from js import Blob, document, URL
+    
         async def gerar_relatorio(event):
             status = document.getElementById("status")
             status.innerHTML = "⏳ Acessando planilha e processando..."
             
             try:
-                # 1. URL da sua planilha convertida para formato CSV
-                url = "https://docs.google.com/spreadsheets/d/18yTaoaf6_dCcZSkHdUFVnreF_GjT5cZoShkpxbcfPG8/export?format=csv"
-
-                # 2. Lendo os dados usando open_url (evita erros de bloqueio do navegador)
-                #response = open_url(url)
-                df_origem = pd.read_csv(url)
-
-                # 3. Coletando as informações da primeira linha (índice 0)
-                # Usamos str() e preenchemos vazios com 'N/A' por segurança
+                # 1. Mudamos para exportar explicitamente como XLSX para evitar conflitos
+                url = "https://docs.google.com/spreadsheets/d/18yTaoaf6_dCcZSkHdUFVnreF_GjT5cZoShkpxbcfPG8/export?format=xlsx"
+    
+                # 2. Lendo o conteúdo binário da URL
+                response = open_url(url)
+                # Como o arquivo é binário (Excel), lemos os bytes e colocamos num buffer
+                file_buffer = io.BytesIO(response.to_bytes())
+                
+                # 3. Lendo o Excel (precisa da biblioteca openpyxl que está no py-config)
+                df_origem = pd.read_excel(file_buffer)
+    
+                # 4. Coletando as informações (usando .iloc[0] para pegar a primeira linha de dados)
+                # Certifique-se que os nomes das colunas na planilha são EXATAMENTE esses
                 data_obs = str(df_origem['Data da observação'].iloc[0])
                 telescopio = str(df_origem['Telescópio'].iloc[0])
                 observadores = str(df_origem['Câmera'].iloc[0])
-
-                # 4. Criando o DataFrame df2 conforme suas posições (2B, 3B, 4B)
+    
+                # 5. Criando o df2 conforme suas posições
                 df2 = pd.DataFrame(index=range(5), columns=['A', 'B'])
-                df2.at[1, 'B'] = data_obs     # Célula 2B
-                df2.at[2, 'B'] = telescopio   # Célula 3B
-                df2.at[3, 'B'] = observadores # Célula 4B
-
-                # 5. Criando o arquivo Excel em memória
+                df2.at[1, 'B'] = data_obs
+                df2.at[2, 'B'] = telescopio
+                df2.at[3, 'B'] = observadores
+    
+                # 6. Gerando o novo Excel para download
                 output = io.BytesIO()
                 writer = pd.ExcelWriter(output, engine='xlsxwriter')
                 df2.to_excel(writer, index=False, header=False, sheet_name='Relatório')
-
-                workbook  = writer.book
+    
+                workbook = writer.book
                 worksheet = writer.sheets['Relatório']
-
-                # Formatação: Mesclar A1 e B1 com título
-                merge_format = workbook.add_format({
-                    'bold': 1, 'border': 1, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#D7E4BC'
-                })
+                merge_format = workbook.add_format({'bold': 1, 'border': 1, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#D7E4BC'})
+                
                 worksheet.merge_range(0, 0, 0, 1, "Relatório da observação", merge_format)
-
-                # Ajuste de largura das colunas
                 worksheet.set_column('A:A', 20)
-                largura_conteudo = max(len(data_obs), len(telescopio), len(observadores)) + 5
-                worksheet.set_column('B:B', largura_conteudo)
-
+                largura_b = max(len(data_obs), len(telescopio), len(observadores)) + 5
+                worksheet.set_column('B:B', largura_b)
+    
                 writer.close()
                 output.seek(0)
-
-                # 6. Processo de Download
-                # Gerando nome do arquivo limpo
-                nome_limpo = data_obs.replace('/', '-')
-                nome_arquivo = f"relatorio_{nome_limpo}.xlsx"
-                
-                # Criando o link para download no navegador
-                file_data = output.getvalue()
-                blob = Blob.new([file_data], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})
+    
+                # 7. Download
+                nome_arquivo = f"relatorio_{data_obs.replace('/', '-')}.xlsx"
+                blob = Blob.new([output.getvalue()], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})
                 url_blob = URL.createObjectURL(blob)
                 
                 link = document.createElement("a")
                 link.href = url_blob
                 link.download = nome_arquivo
                 link.click()
-
-                status.innerHTML = f"✅ Download concluído: {nome_arquivo}"
-
+    
+                status.innerHTML = "✅ Relatório gerado com sucesso!"
+    
             except Exception as e:
-                status.innerHTML = f"❌ Erro: {str(e)}. Verifique se a planilha tem acesso 'Qualquer pessoa com o link'."
+                status.innerHTML = f"❌ Erro: {str(e)}"
     </py-script>
 
 </body>

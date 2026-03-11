@@ -7,19 +7,22 @@
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
     <style>
         body { font-family: sans-serif; text-align: center; padding: 50px; background-color: #121212; color: white; }
-        .box { border: 1px solid #333; padding: 20px; display: inline-block; border-radius: 10px; }
-        button { background: #238636; color: white; border: none; padding: 10px 20px; cursor: pointer; border-radius: 5px; }
+        .box { border: 1px solid #333; padding: 20px; display: inline-block; border-radius: 10px; background-color: #1e1e1e; }
+        button { background: #238636; color: white; border: none; padding: 12px 24px; cursor: pointer; border-radius: 5px; font-weight: bold; }
+        button:hover { background: #2ea043; }
+        #status { margin-top: 20px; color: #aaa; }
     </style>
 </head>
 <body>
     <div class="box">
-        <h1>🔭 Gerar Relatório XLSX</h1>
-        <button id="btn" py-click="executar">Baixar Agora</button>
-        <p id="status"></p>
+        <h1>🔭 Gerar Relatório Astronomia</h1>
+        <p>Lendo dados diretamente do Google Sheets</p>
+        <button id="btn" py-click="executar">Gerar e Baixar (.xlsx)</button>
+        <p id="status">Aguardando comando...</p>
     </div>
 
     <py-config>
-        packages = ["pandas", "xlsxwriter"]
+        packages = ["pandas", "xlsxwriter", "openpyxl"]
     </py-config>
 
     <py-script>
@@ -30,29 +33,38 @@
 
         async def executar(event):
             status = document.getElementById("status")
-            status.innerHTML = "Processando..."
+            status.innerHTML = "⏳ Conectando ao Google..."
             try:
-                # 1. BUSCA DOS DADOS (Convertendo a URL para garantir CSV limpo)
-                url = "https://docs.google.com/spreadsheets/d/18yTaoaf6_dCcZSkHdUFVnreF_GjT5cZoShkpxbcfPG8/export?format=csv"
+                # 1. LINK DE EXPORTAÇÃO (Forçando XLSX para evitar o erro de CSV)
+                url = "https://docs.google.com/spreadsheets/d/18yTaoaf6_dCcZSkHdUFVnreF_GjT5cZoShkpxbcfPG8/export?format=xlsx"
                 
-                # No PyScript, usamos open_url para ler a rede do navegador corretamente
-                dados_csv = open_url(url)
-                df = pd.read_csv(dados_csv)
+                # Baixando o arquivo como um fluxo de bytes
+                response = open_url(url)
+                bytes_data = response.to_bytes()
+                
+                # Criando um buffer para o Pandas ler o Excel
+                input_buffer = io.BytesIO(bytes_data)
+                
+                # Lendo como EXCEL em vez de CSV
+                df = pd.read_excel(input_buffer)
 
-                # Extraindo os valores (como você fez no seu código)
-                data_obs = df['Data da observação']
-                telescopio = df['Telescópio']
-                observadores = df['Câmera']
+                # Extraindo os valores (como no seu código original)
+                # Usamos .iloc[0] para garantir que pegamos o valor da primeira linha
+                data_obs = str(df['Data da observação'].iloc[0])
+                telescopio = str(df['Telescópio'].iloc[0])
+                observadores = str(df['Câmera'].iloc[0])
+
+                status.innerHTML = "📝 Formatando relatório..."
 
                 # 2. CRIAÇÃO DO DF2 (Estrutura de posições)
                 df2 = pd.DataFrame(index=range(5), columns=['A', 'B'])
-                df2.at[1, 'B'] = data_obs[0]
-                df2.at[2, 'B'] = telescopio[0]
-                df2.at[3, 'B'] = observadores[0]
+                df2.at[1, 'B'] = data_obs
+                df2.at[2, 'B'] = telescopio
+                df2.at[3, 'B'] = observadores
 
-                # 3. EXPORTAÇÃO PARA MEMÓRIA (Substitui o arquivo físico no PC)
+                # 3. EXPORTAÇÃO PARA DOWNLOAD
                 output = io.BytesIO()
-                file_name = f"relatorio_observacao_{str(data_obs[0]).replace('/','-')}.xlsx"
+                file_name = f"relatorio_{data_obs.replace('/','-')}.xlsx"
                 
                 writer = pd.ExcelWriter(output, engine='xlsxwriter')
                 df2.to_excel(writer, index=False, header=False, sheet_name='Relatório')
@@ -60,20 +72,19 @@
                 workbook = writer.book
                 worksheet = writer.sheets['Relatório']
 
-                # Formatos e Mesclagem (Igual ao seu código)
+                # Formatação visual (Igual ao seu código)
                 merge_format = workbook.add_format({'bold': 1, 'border': 1, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#D7E4BC'})
                 worksheet.merge_range(0, 0, 0, 1, "Relatório da observação", merge_format)
 
-                # Ajuste de largura (Igual ao seu código)
+                # Ajuste de largura
                 worksheet.set_column('A:A', 20)
-                lista_textos = [str(data_obs[0]), str(telescopio[0]), str(observadores[0])]
-                maior_texto = max(len(t) for t in lista_textos)
-                worksheet.set_column('B:B', maior_texto + 2)
+                maior_texto = max(len(data_obs), len(telescopio), len(observadores))
+                worksheet.set_column('B:B', maior_texto + 5)
 
                 writer.close()
                 output.seek(0)
 
-                # 4. DOWNLOAD NO NAVEGADOR
+                # 4. GERAÇÃO DO LINK DE DOWNLOAD NO NAVEGADOR
                 blob = Blob.new([output.getvalue()], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})
                 url_download = URL.createObjectURL(blob)
                 link = document.createElement("a")
@@ -81,9 +92,9 @@
                 link.download = file_name
                 link.click()
 
-                status.innerHTML = "✅ Concluído!"
+                status.innerHTML = "✅ Arquivo baixado com sucesso!"
             except Exception as e:
-                status.innerHTML = f"❌ Erro: {str(e)}"
+                status.innerHTML = f"❌ Erro detectado: {str(e)}"
     </py-script>
 </body>
 </html>

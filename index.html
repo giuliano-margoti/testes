@@ -47,8 +47,8 @@
                 url = "https://docs.google.com/spreadsheets/d/18yTaoaf6_dCcZSkHdUFVnreF_GjT5cZoShkpxbcfPG8/export?format=csv"
 
                 # 2. Lendo os dados usando open_url (evita erros de bloqueio do navegador)
-                response = open_url(url)
-                df_origem = pd.read_csv(response)
+                #response = open_url(url)
+                df_origem = pd.read_csv(url)
 
                 # 3. Coletando as informações da primeira linha (índice 0)
                 # Usamos str() e preenchemos vazios com 'N/A' por segurança

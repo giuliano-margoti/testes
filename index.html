@@ -3,98 +3,106 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador de Relatório Astronômico</title>
+    <title>Gerador de Relatórios Astronomia</title>
+    
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 50px; background-color: #f4f4f9; }
-        #generate-btn { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 5px; }
-        #status { margin-top: 20px; color: #555; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0b0e14; color: white; text-align: center; padding: 50px; }
+        .container { background-color: #1c2128; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); display: inline-block; }
+        h1 { color: #58a6ff; }
+        #generate-btn { background-color: #238636; color: white; border: none; padding: 15px 30px; font-size: 16px; border-radius: 6px; cursor: pointer; transition: 0.3s; }
+        #generate-btn:hover { background-color: #2ea043; }
+        #status { margin-top: 20px; font-size: 14px; color: #8b949e; }
     </style>
 </head>
 <body>
 
-    <h1>Relatório de Observação</h1>
-    <p>Clique no botão abaixo para ler os dados da planilha e gerar o arquivo Excel.</p>
-    
-    <button id="generate-btn" py-click="gerar_relatorio">Gerar e Baixar Relatório (.xlsx)</button>
-    <div id="status"></div>
+    <div class="container">
+        <h1>🔭 Gerador de Relatório</h1>
+        <p>Extração automática de dados do Google Sheets</p>
+        
+        <button id="generate-btn" py-click="gerar_relatorio">Gerar Excel agora</button>
+        
+        <div id="status">Pronto para iniciar.</div>
+    </div>
 
     <py-config>
-        packages = ["pandas", "xlsxwriter", "openpyxl"]
+        packages = ["pandas", "xlsxwriter"]
     </py-config>
 
     <py-script>
         import pandas as pd
         import io
-        from js import Blob, document, URL # Integração com o JavaScript do navegador
-        from pyodide.http import open_url # Importe isso no topo do seu <py-script>
+        from pyodide.http import open_url # Necessário para abrir URLs no navegador
+        from js import Blob, document, URL # Ferramentas para gerar download via JS
 
         async def gerar_relatorio(event):
             status = document.getElementById("status")
-            status.innerHTML = "⌛ Lendo planilha do Google e gerando arquivo..."
+            status.innerHTML = "⏳ Acessando planilha e processando..."
             
             try:
-                # 1. Definição da URL da planilha (exportando como CSV)        
-                url = "https://docs.google.com/spreadsheets/d/18yTaoaf6_dCcZSkHdUFVnreF_GjT5cZoShkpxbcfPG8/edit?usp=sharing"
-                # Usamos o open_url para contornar restrições de rede do navegador
-                csv_data = open_url(url) 
-                df_origem = pd.read_csv(csv_data)
+                # 1. URL da sua planilha convertida para formato CSV
+                url = "https://docs.google.com/spreadsheets/d/18yTaoaf6_dCcZSkHdUFVnreF_GjT5cZoShkpxbcfPG8/export?format=csv"
 
-                # 3. Extraindo as informações (pegando o primeiro registro [0])
-                data_obs = str(df_origem['Data da observação'][0])
-                telescopio = str(df_origem['Telescópio'][0])
-                observadores = str(df_origem['Câmera'][0])
+                # 2. Lendo os dados usando open_url (evita erros de bloqueio do navegador)
+                response = open_url(url)
+                df_origem = pd.read_csv(response)
 
-                # 4. Criando o df2 com a estrutura de posições específicas (B2, B3, B4)
+                # 3. Coletando as informações da primeira linha (índice 0)
+                # Usamos str() e preenchemos vazios com 'N/A' por segurança
+                data_obs = str(df_origem['Data da observação'].iloc[0])
+                telescopio = str(df_origem['Telescópio'].iloc[0])
+                observadores = str(df_origem['Câmera'].iloc[0])
+
+                # 4. Criando o DataFrame df2 conforme suas posições (2B, 3B, 4B)
                 df2 = pd.DataFrame(index=range(5), columns=['A', 'B'])
-                df2.at[1, 'B'] = data_obs     # Posição 2B
-                df2.at[2, 'B'] = telescopio   # Posição 3B
-                df2.at[3, 'B'] = observadores # Posição 4B
+                df2.at[1, 'B'] = data_obs     # Célula 2B
+                df2.at[2, 'B'] = telescopio   # Célula 3B
+                df2.at[3, 'B'] = observadores # Célula 4B
 
-                # 5. Configurando a escrita do Excel em memória (buffer)
+                # 5. Criando o arquivo Excel em memória
                 output = io.BytesIO()
                 writer = pd.ExcelWriter(output, engine='xlsxwriter')
                 df2.to_excel(writer, index=False, header=False, sheet_name='Relatório')
 
-                # 6. Formatação Visual
                 workbook  = writer.book
                 worksheet = writer.sheets['Relatório']
 
-                # Criando estilo para a célula mesclada (verde claro)
+                # Formatação: Mesclar A1 e B1 com título
                 merge_format = workbook.add_format({
                     'bold': 1, 'border': 1, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#D7E4BC'
                 })
-
-                # Mesclando A1 e B1 (índice 0,0 até 0,1)
                 worksheet.merge_range(0, 0, 0, 1, "Relatório da observação", merge_format)
 
-                # Ajustando larguras: Coluna A fixa em 20, Coluna B dinâmica
+                # Ajuste de largura das colunas
                 worksheet.set_column('A:A', 20)
-                largura_b = max(len(data_obs), len(telescopio), len(observadores)) + 5
-                worksheet.set_column('B:B', largura_b)
+                largura_conteudo = max(len(data_obs), len(telescopio), len(observadores)) + 5
+                worksheet.set_column('B:B', largura_conteudo)
 
-                # Fecha o arquivo Excel na memória
                 writer.close()
                 output.seek(0)
 
-                # 7. Lógica de Download no Navegador
-                nome_arquivo = f"relatorio_{data_obs.replace('/', '-')}.xlsx"
-                file_data = output.getvalue()
-                # Transforma os bytes do Python em um objeto de download do navegador
-                blob = Blob.new([file_data], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})
-                url_download = URL.createObjectURL(blob)
+                # 6. Processo de Download
+                # Gerando nome do arquivo limpo
+                nome_limpo = data_obs.replace('/', '-')
+                nome_arquivo = f"relatorio_{nome_limpo}.xlsx"
                 
-                # Cria um link invisível e "clica" nele para baixar
+                # Criando o link para download no navegador
+                file_data = output.getvalue()
+                blob = Blob.new([file_data], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})
+                url_blob = URL.createObjectURL(blob)
+                
                 link = document.createElement("a")
-                link.href = url_download
+                link.href = url_blob
                 link.download = nome_arquivo
                 link.click()
 
-                status.innerHTML = f"✅ Sucesso! Arquivo '{nome_arquivo}' baixado."
+                status.innerHTML = f"✅ Download concluído: {nome_arquivo}"
 
             except Exception as e:
-                status.innerHTML = f"❌ Erro: Verifique se a planilha é pública. <br> {str(e)}"
+                status.innerHTML = f"❌ Erro: {str(e)}. Verifique se a planilha tem acesso 'Qualquer pessoa com o link'."
     </py-script>
 
 </body>

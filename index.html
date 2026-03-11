@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Gerador de Relatório de Observação</title>
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+</head>
+<body>
+    <h1>Gerador de Relatório de Astronomia</h1>
+    <button id="generate-btn" py-click="generate_excel">Gerar e Baixar Excel</button>
+    <div id="status"></div>
+
+    <py-config>
+        packages = ["pandas", "xlsxwriter"]
+    </py-config>
+
+    <py-script>
+        import pandas as pd
+        import io
+        from pyodide.ffi import create_proxy
+        from js import Blob, document, URL, window
+
+        def generate_excel(event):
+            status = document.getElementById("status")
+            status.innerHTML = "Processando..."
+            
+            # 1. Seus dados
+            data_obs = "11/03/2026"
+            telescopio = "James Webb"
+            observadores = "Dra. Smith"
+
+            df2 = pd.DataFrame(index=range(5), columns=['A', 'B'])
+            df2.at[1, 'B'] = data_obs
+            df2.at[2, 'B'] = telescopio
+            df2.at[3, 'B'] = observadores
+
+            # 2. Criar o Excel em memória (BytesIO)
+            output = io.BytesIO()
+            writer = pd.ExcelWriter(output, engine='xlsxwriter')
+            df2.to_excel(writer, index=False, header=False, sheet_name='Relatório')
+            
+            # Formatação (mesmo código que já usamos)
+            workbook = writer.book
+            worksheet = writer.sheets['Relatório']
+            merge_format = workbook.add_format({'bold': 1, 'border': 1, 'align': 'center', 'valign': 'center', 'fg_color': '#D7E4BC'})
+            worksheet.merge_range(0, 0, 0, 1, "Relatório da observação", merge_format)
+            worksheet.set_column('B:B', 40)
+            
+            writer.close()
+            output.seek(0)
+
+            # 3. Criar o link de download no navegador
+            file_data = output.getvalue()
+            blob = Blob.new([file_data], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})
+            url = URL.createObjectURL(blob)
+            
+            link = document.createElement("a")
+            link.href = url
+            link.download = "relatorio_observacao.xlsx"
+            link.click()
+            
+            status.innerHTML = "Download concluído!"
+    </py-script>
+</body>
+</html>

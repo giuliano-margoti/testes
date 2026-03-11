@@ -28,17 +28,18 @@
         import pandas as pd
         import io
         from js import Blob, document, URL # Integração com o JavaScript do navegador
+        from pyodide.http import open_url # Importe isso no topo do seu <py-script>
 
         async def gerar_relatorio(event):
             status = document.getElementById("status")
             status.innerHTML = "⌛ Lendo planilha do Google e gerando arquivo..."
             
             try:
-                # 1. Definição da URL da planilha (exportando como CSV)
-                url = "https://docs.google.com/spreadsheets/d/18yTaoaf6_dCcZSkHdUFVnreF_GjT5cZoShkpxbcfPG8/export?format=csv"
-
-                # 2. Lendo os dados para um DataFrame original
-                df_origem = pd.read_csv(url)
+                # 1. Definição da URL da planilha (exportando como CSV)        
+                url = "https://docs.google.com/spreadsheets/d/18yTaoaf6_dCcZSkHdUFVnreF_GjT5cZoShkpxbcfPG8/edit?usp=sharing"
+                # Usamos o open_url para contornar restrições de rede do navegador
+                csv_data = open_url(url) 
+                df_origem = pd.read_csv(csv_data)
 
                 # 3. Extraindo as informações (pegando o primeiro registro [0])
                 data_obs = str(df_origem['Data da observação'][0])

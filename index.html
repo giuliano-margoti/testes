@@ -32,7 +32,7 @@
         <p>Gera o arquivo Excel formatado diretamente do formulário.</p>
         <br>
         
-        <button id="btn-download" py-click="gerar_relatorio">📥 Gerar e Baixar Excel</button>
+        <button id="btn-download" py-click="gerar_relatorio">Gerar e Baixar Excel</button>
         
         <div id="status">
             <div class="loader"></div> Carregando ambiente Python...
@@ -50,11 +50,11 @@
         from js import Uint8Array, File, URL, document
 
         # Notifica que o sistema está pronto
-        document.getElementById("status").innerHTML = "✅ Ambiente Pronto"
+        document.getElementById("status").innerHTML = "Ambiente Pronto"
 
         def gerar_relatorio(event):
             status_div = document.getElementById("status")
-            status_div.innerHTML = "⏳ Processando dados..."
+            status_div.innerHTML = "Processando dados..."
             
             try:
                 # 1. Dados da Planilha
@@ -139,10 +139,10 @@
                 link.click()
                 document.body.removeChild(link)
                 
-                status_div.innerHTML = "✅ Relatório baixado com sucesso!"
+                status_div.innerHTML = "Relatório baixado com sucesso!"
                 
             except Exception as e:
-                status_div.innerHTML = f"❌ Erro: {str(e)}"
+                status_div.innerHTML = f"Erro: {str(e)}"
     </py-script>
 
 </body>

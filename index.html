@@ -1,149 +1,73 @@
+html_content = """
 <!DOCTYPE html>
-<html lang="pt-br">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador de Relatório de Observação</title>
-    
-    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css" />
-    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
-
+    <title>Aladin Lite - CSV Plotter</title>
+    <meta charset="utf-8">
+    <script type="text/javascript" src="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js" charset="utf-8"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding: 40px; background-color: #eceff1; }
-        .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: inline-block; max-width: 500px; }
-        h1 { color: #2c3e50; margin-bottom: 10px; }
-        p { color: #7f8c8d; }
-        button { 
-            padding: 15px 30px; font-size: 18px; cursor: pointer; 
-            background-color: #27ae60; color: white; border: none; 
-            border-radius: 8px; transition: 0.3s; font-weight: bold;
-        }
-        button:hover { background-color: #219150; transform: scale(1.02); }
-        button:disabled { background-color: #bdc3c7; cursor: not-allowed; }
-        #status { margin-top: 25px; font-weight: bold; color: #34495e; }
-        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 2s linear infinite; display: inline-block; vertical-align: middle; margin-right: 10px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        body { font-family: sans-serif; margin: 20px; background: #f4f4f4; }
+        #controls { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        #aladin-lite-div { width: 100%; height: 600px; border-radius: 8px; }
+        .info { font-size: 0.9em; color: #666; }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h1>Relatório de Observação</h1>
-        <p>Gera o arquivo Excel formatado diretamente do formulário.</p>
-        <br>
-        
-        <button id="btn-download" py-click="gerar_relatorio">Gerar e Baixar Excel</button>
-        
-        <div id="status">
-            <div class="loader"></div> Carregando ambiente Python...
-        </div>
-    </div>
+<div id="controls">
+    <h2>Plotador de Coordenadas (CSV)</h2>
+    <input type="file" id="csvFile" accept=".csv">
+    <p class="info">O CSV deve ter colunas: <b>ra, dec</b> (separadas por vírgula)</p>
+</div>
 
-    <py-config>
-        packages = ["pandas", "xlsxwriter", "openpyxl"]
-    </py-config>
+<div id="aladin-lite-div"></div>
 
-    <py-script>
-        import pandas as pd
-        import io
-        from pyodide.http import open_url
-        from js import Uint8Array, File, URL, document
+<script type="text/javascript">
+    // Inicializa o Aladin Lite
+    let aladin = A.aladin('#aladin-lite-div', {survey: "P/DSS2/color", fov: 1.5});
+    let markerLayer = A.catalog({name: 'Meus Objetos', color: '#ff0000', shape: 'plus'});
+    aladin.addCatalog(markerLayer);
 
-        # Notifica que o sistema está pronto
-        document.getElementById("status").innerHTML = "Ambiente Pronto"
+    document.getElementById('csvFile').onchange = function(e) {
+        let file = e.target.files[0];
+        let reader = new FileReader();
 
-        def gerar_relatorio(event):
-            status_div = document.getElementById("status")
-            status_div.innerHTML = "Processando dados..."
+        reader.onload = function(event) {
+            let text = event.target.result;
+            let lines = text.split('\\n');
             
-            try:
-                # 1. Dados da Planilha
-                url = "https://docs.google.com/spreadsheets/d/18yTaoaf6_dCcZSkHdUFVnreF_GjT5cZoShkpxbcfPG8/export?format=csv"
-                df = pd.read_csv(open_url(url))
-                
-                # Extração das variáveis do seu código
-                data_obs = str(df['Data da observação'][0])
-                telescopio = str(df['Telescópio'][0])
-                observadores = str(df['Observadores'][0])
-                camera = str(df['Câmera'][0])
-                norte = str(df['Orientação da câmera (Norte)'][0])
-                leste = str(df['Orientação da câmera (Leste)'][0])
+            // Limpa pontos anteriores
+            markerLayer.clean();
+            
+            let firstCoord = null;
 
-                # Criando o DataFrame base (conforme sua lógica de índices)
-                df2 = pd.DataFrame(index=range(21), columns=['A', 'B', 'C', 'D'])
-                df2.at[1, 'A'] = 'Data'
-                df2.at[2, 'A'] = 'Telescópio'
-                df2.at[3, 'A'] = 'Observadores'
+            for(let i = 1; i < lines.length; i++) {
+                let cols = lines[i].split(',');
+                if(cols.length >= 2) {
+                    let ra = parseFloat(cols[0]);
+                    let dec = parseFloat(cols[1]);
+                    
+                    if(!isNaN(ra) && !isNaN(dec)) {
+                        markerLayer.addSources([A.source(ra, dec)]);
+                        if(!firstCoord) firstCoord = [ra, dec];
+                    }
+                }
+            }
 
-                # Horários
-                for i, hora in enumerate(['18h', '19h', '20h', '21h', '22h', '23h'], 6):
-                    df2.at[i, 'A'] = hora
-                    df2.at[i, 'C'] = hora
-
-                # 2. Gerando o Excel em memória
-                output = io.BytesIO()
-                writer = pd.ExcelWriter(output, engine='xlsxwriter')
-                df2.to_excel(writer, index=False, header=False, sheet_name='Relatório')
-
-                workbook  = writer.book
-                worksheet = writer.sheets['Relatório']
-
-                # Formatos
-                merge_format_G = workbook.add_format({'bold': 1, 'border': 1, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#D7E4BC'})
-                merge_format_W = workbook.add_format({'bold': 1, 'border': 1, 'align': 'center', 'valign': 'vcenter'})
-
-                # Aplicando as mesclagens e escritas do seu script
-                worksheet.merge_range(0, 0, 0, 3, "Relatório da observação", merge_format_G)
-                worksheet.merge_range(4, 0, 4, 3, "Objetos observados", merge_format_G)
-                
-                worksheet.merge_range(1, 1, 1, 3, data_obs, merge_format_W)
-                worksheet.merge_range(2, 1, 2, 3, telescopio, merge_format_W)
-                worksheet.merge_range(3, 1, 3, 3, observadores, merge_format_W)
-                
-                worksheet.merge_range(10, 0, 10, 3, "Dados técnicos", merge_format_G)
-                worksheet.merge_range(11, 0, 11, 1, "Câmera", merge_format_W)
-                worksheet.merge_range(11, 2, 11, 3, camera, merge_format_W)
-                
-                worksheet.merge_range(12, 0, 12, 1, "Orientação do Campo (N, E)", merge_format_W)
-                worksheet.write(12, 2, norte, merge_format_W)
-                worksheet.write(12, 3, leste, merge_format_W)
-                
-                worksheet.merge_range(13, 0, 13, 1, "Escala de Placa", merge_format_W)
-                worksheet.merge_range(13, 2, 13, 3, 0.37, merge_format_W)
-                
-                worksheet.merge_range(14, 0, 14, 3, "Condições climáticas no início da noite", merge_format_G)
-                worksheet.merge_range(15, 0, 15, 1, 'Condições do céu',  merge_format_W)
-                worksheet.merge_range(16, 0, 16, 1, 'Umidade (%)', merge_format_W)
-                worksheet.merge_range(17, 0, 17, 1, 'Temperatura (ºC)',  merge_format_W)
-                worksheet.merge_range(18, 0, 18, 1, 'Velocidade do vento (km/s)', merge_format_W)
-                worksheet.merge_range(19, 0, 19, 1, 'Direção do vento',  merge_format_W)
-                worksheet.merge_range(20, 0, 20, 1, 'Pressão (mm Hg)', merge_format_W)
-
-                # Ajuste de Colunas
-                worksheet.set_column('A:D', 20)
-
-                writer.close()
-                
-                # 3. Processo de Download
-                processed_data = output.getvalue()
-                nome_arquivo = f"relatorio_{data_obs.replace('/','-')}.xlsx"
-                
-                js_array = Uint8Array.new(processed_data)
-                file = File.new([js_array], nome_arquivo, {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})
-                url = URL.createObjectURL(file)
-                
-                link = document.createElement("a")
-                link.href = url
-                link.download = nome_arquivo
-                document.body.appendChild(link)
-                link.click()
-                document.body.removeChild(link)
-                
-                status_div.innerHTML = "Relatório baixado com sucesso!"
-                
-            except Exception as e:
-                status_div.innerHTML = f"Erro: {str(e)}"
-    </py-script>
+            // Centraliza no primeiro ponto da lista
+            if(firstCoord) {
+                aladin.gotoRaDec(firstCoord[0], firstCoord[1]);
+            }
+        };
+        reader.readAsText(file);
+    };
+</script>
 
 </body>
 </html>
+"""
+
+with open("visualizador_aladin.html", "w", encoding="utf-8") as f:
+    f.write(html_content)
+
+print("Arquivo 'visualizador_aladin.html' gerado com sucesso!")

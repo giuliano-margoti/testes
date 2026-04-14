@@ -1,70 +1,72 @@
-html_content = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Ikon-L IAG - Visualizador</title>
+    <title>Ikon-L IAG - Visualizador de Ocultações</title>
     <meta charset="utf-8">
     <script type="text/javascript" src="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js" charset="utf-8"></script>
     <style>
-        body { font-family: sans-serif; margin: 0; background: #1a1a1a; color: white; display: flex; flex-direction: column; height: 100vh; }
-        #header { padding: 15px; background: #2c3e50; border-bottom: 2px solid #34495e; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #1a1a1a; color: white; display: flex; flex-direction: column; height: 100vh; }
+        #header { padding: 15px; background: #2c3e50; border-bottom: 2px solid #34495e; display: flex; align-items: center; gap: 20px; }
         #aladin-lite-div { flex-grow: 1; width: 100%; }
-        .controls { display: flex; gap: 15px; align-items: center; }
-        input { background: #34495e; color: white; border: none; padding: 5px; border-radius: 4px; }
+        .btn-upload { background: #27ae60; color: white; padding: 8px 15px; border-radius: 4px; cursor: pointer; border: none; }
+        input[type="file"] { display: none; }
     </style>
 </head>
 <body>
     <div id="header">
-        <div class="controls">
-            <strong>Plotador Ikon-L (IAG)</strong>
+        <strong>Ikon-L IAG (FOV 11.3')</strong>
+        <label class="btn-upload">
+            Selecionar CSV (ra, dec)
             <input type="file" id="csvFile" accept=".csv">
-            <span style="font-size: 0.8em; color: #bdc3c7;">Colunas: ra, dec</span>
-        </div>
+        </label>
+        <span id="status" style="font-size: 0.8em; color: #bdc3c7;">Aguardando arquivo...</span>
     </div>
     <div id="aladin-lite-div"></div>
 
     <script type="text/javascript">
-        let aladin = A.aladin('#aladin-lite-div', {survey: "P/DSS2/color", fov: 0.5});
-        let fovLayer = A.graphicOverlay({color: '#2ecc71', lineWidth: 2, name: 'Ikon-L FOV'});
+        // Inicializa o Aladin
+        var aladin = A.aladin('#aladin-lite-div', {survey: "P/DSS2/color", fov: 1.0});
+        var fovLayer = A.graphicOverlay({color: '#2ecc71', lineWidth: 2, name: 'Ikon-L IAG'});
         aladin.addOverlay(fovLayer);
 
         document.getElementById('csvFile').onchange = function(e) {
-            let reader = new FileReader();
+            var file = e.target.files[0];
+            if (!file) return;
+            
+            var reader = new FileReader();
             reader.onload = function(event) {
-                let lines = event.target.result.split(/\\r?\\n/);
+                var lines = event.target.result.split(/\r?\n/);
                 fovLayer.removeAll();
-                let first = null;
+                var first = null;
+                var count = 0;
 
-                lines.forEach((line, i) => {
+                lines.forEach(function(line, i) {
                     if (i === 0 && line.toLowerCase().includes('ra')) return;
-                    let cols = line.split(',');
+                    var cols = line.split(',');
                     if(cols.length >= 2) {
-                        let ra = parseFloat(cols[0]);
-                        let dec = parseFloat(cols[1]);
+                        var ra = parseFloat(cols[0]);
+                        var dec = parseFloat(cols[1]);
                         if(!isNaN(ra) && !isNaN(dec)) {
                             if(!first) first = [ra, dec];
-                            // Desenha o polígono baseado no seu arquivo .fov
-                            let v = [
+                            // Desenha o polígono do Ikon-L IAG (11.3' x 11.3')
+                            var v = [
                                 [ra + (-150/3600), dec + (150/3600)],
                                 [ra + (530/3600),  dec + (150/3600)],
                                 [ra + (530/3600),  dec + (-530/3600)],
                                 [ra + (-150/3600), dec + (-530/3600)]
                             ];
                             fovLayer.add(A.polygon(v));
+                            count++;
                         }
                     }
                 });
-                if(first) aladin.gotoRaDec(first[0], first[1]);
+                if(first) {
+                    aladin.gotoRaDec(first[0], first[1]);
+                    document.getElementById('status').innerText = count + " campos plotados.";
+                }
             };
-            reader.readAsText(e.target.files[0]);
+            reader.readAsText(file);
         };
     </script>
 </body>
 </html>
-"""
-
-# Este comando cria o arquivo HTML na sua pasta
-with open("visualizador_aladin.html", "w", encoding="utf-8") as f:
-    f.write(html_content)
-
-print("SUCESSO! Procure pelo arquivo 'visualizador_aladin.html' na sua pasta e abra-o no navegador.")

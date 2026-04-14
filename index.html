@@ -2,72 +2,69 @@ html_content = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Aladin Lite - CSV Plotter</title>
+    <title>Ikon-L IAG - Visualizador</title>
     <meta charset="utf-8">
     <script type="text/javascript" src="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js" charset="utf-8"></script>
     <style>
-        body { font-family: sans-serif; margin: 20px; background: #f4f4f4; }
-        #controls { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        #aladin-lite-div { width: 100%; height: 600px; border-radius: 8px; }
-        .info { font-size: 0.9em; color: #666; }
+        body { font-family: sans-serif; margin: 0; background: #1a1a1a; color: white; display: flex; flex-direction: column; height: 100vh; }
+        #header { padding: 15px; background: #2c3e50; border-bottom: 2px solid #34495e; }
+        #aladin-lite-div { flex-grow: 1; width: 100%; }
+        .controls { display: flex; gap: 15px; align-items: center; }
+        input { background: #34495e; color: white; border: none; padding: 5px; border-radius: 4px; }
     </style>
 </head>
 <body>
+    <div id="header">
+        <div class="controls">
+            <strong>Plotador Ikon-L (IAG)</strong>
+            <input type="file" id="csvFile" accept=".csv">
+            <span style="font-size: 0.8em; color: #bdc3c7;">Colunas: ra, dec</span>
+        </div>
+    </div>
+    <div id="aladin-lite-div"></div>
 
-<div id="controls">
-    <h2>Plotador de Coordenadas (CSV)</h2>
-    <input type="file" id="csvFile" accept=".csv">
-    <p class="info">O CSV deve ter colunas: <b>ra, dec</b> (separadas por vírgula)</p>
-</div>
+    <script type="text/javascript">
+        let aladin = A.aladin('#aladin-lite-div', {survey: "P/DSS2/color", fov: 0.5});
+        let fovLayer = A.graphicOverlay({color: '#2ecc71', lineWidth: 2, name: 'Ikon-L FOV'});
+        aladin.addOverlay(fovLayer);
 
-<div id="aladin-lite-div"></div>
+        document.getElementById('csvFile').onchange = function(e) {
+            let reader = new FileReader();
+            reader.onload = function(event) {
+                let lines = event.target.result.split(/\\r?\\n/);
+                fovLayer.removeAll();
+                let first = null;
 
-<script type="text/javascript">
-    // Inicializa o Aladin Lite
-    let aladin = A.aladin('#aladin-lite-div', {survey: "P/DSS2/color", fov: 1.5});
-    let markerLayer = A.catalog({name: 'Meus Objetos', color: '#ff0000', shape: 'plus'});
-    aladin.addCatalog(markerLayer);
-
-    document.getElementById('csvFile').onchange = function(e) {
-        let file = e.target.files[0];
-        let reader = new FileReader();
-
-        reader.onload = function(event) {
-            let text = event.target.result;
-            let lines = text.split('\\n');
-            
-            // Limpa pontos anteriores
-            markerLayer.clean();
-            
-            let firstCoord = null;
-
-            for(let i = 1; i < lines.length; i++) {
-                let cols = lines[i].split(',');
-                if(cols.length >= 2) {
-                    let ra = parseFloat(cols[0]);
-                    let dec = parseFloat(cols[1]);
-                    
-                    if(!isNaN(ra) && !isNaN(dec)) {
-                        markerLayer.addSources([A.source(ra, dec)]);
-                        if(!firstCoord) firstCoord = [ra, dec];
+                lines.forEach((line, i) => {
+                    if (i === 0 && line.toLowerCase().includes('ra')) return;
+                    let cols = line.split(',');
+                    if(cols.length >= 2) {
+                        let ra = parseFloat(cols[0]);
+                        let dec = parseFloat(cols[1]);
+                        if(!isNaN(ra) && !isNaN(dec)) {
+                            if(!first) first = [ra, dec];
+                            // Desenha o polígono baseado no seu arquivo .fov
+                            let v = [
+                                [ra + (-150/3600), dec + (150/3600)],
+                                [ra + (530/3600),  dec + (150/3600)],
+                                [ra + (530/3600),  dec + (-530/3600)],
+                                [ra + (-150/3600), dec + (-530/3600)]
+                            ];
+                            fovLayer.add(A.polygon(v));
+                        }
                     }
-                }
-            }
-
-            // Centraliza no primeiro ponto da lista
-            if(firstCoord) {
-                aladin.gotoRaDec(firstCoord[0], firstCoord[1]);
-            }
+                });
+                if(first) aladin.gotoRaDec(first[0], first[1]);
+            };
+            reader.readAsText(e.target.files[0]);
         };
-        reader.readAsText(file);
-    };
-</script>
-
+    </script>
 </body>
 </html>
 """
 
+# Este comando cria o arquivo HTML na sua pasta
 with open("visualizador_aladin.html", "w", encoding="utf-8") as f:
     f.write(html_content)
 
-print("Arquivo 'visualizador_aladin.html' gerado com sucesso!")
+print("SUCESSO! Procure pelo arquivo 'visualizador_aladin.html' na sua pasta e abra-o no navegador.")
